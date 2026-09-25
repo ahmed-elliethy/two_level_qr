@@ -1,0 +1,10 @@
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+
+# Node / web
+node_modules/
+.next/
+dist/
+*.log
