@@ -39,7 +39,7 @@ Add the package to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  two_level_qr: ^0.1.0
+  two_level_qr: ^0.1.1
 ```
 
 Then run:
