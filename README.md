@@ -236,12 +236,15 @@ dart test
 
 ## Architecture Notes
 
-- `EncodeHiddenQr` and `DecodeHiddenQr` are separate use cases that compose
- the normal `EncodeQr` / `DecodeQr` pipelines.
-- `BlockInterleaverPort` was extended with `interleaveBlocks` so pre-built RS
- blocks can be re-interleaved after deliberate modification.
-- The PRNG is self-contained: FNV-1a 64-bit hashing seeds a xorshift*
- generator. No `package:crypto` dependency is required.
+- `EncodeHiddenQr` and `DecodeHiddenQr` are separate use cases that compose the normal `EncodeQr` / `DecodeQr` pipelines.
+- `BlockInterleaverPort` was extended with `interleaveBlocks` so pre-built RS blocks can be re-interleaved after deliberate modification.
+- The PRNG is self-contained: FNV-1a 64-bit hashing seeds a xorshift* generator. No `package:crypto` dependency is required.
+
+## TODO List
+
+- [x] Set up initial project repository
+- [ ] Add another layer of security by encrypting the payload before hiding it using the same key
+
 
 ## License
 
