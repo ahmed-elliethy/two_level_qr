@@ -2,7 +2,7 @@
 
 A Dart SDK that implements a **keyed two-level QR** mode that hides a secret message during encoding of a QR. The hiding is performed within the Reed-Solomon error-correction channel by introducing deliberate errors. Reed-Solomon correction restores the original public data, while the difference between the raw and corrected codewords carries the hidden payload. The key controls **which positions** carry the secret, so extraction requires the same key used during encoding. The SDK also supports a full QR Code encoding and decoding pipeline with all stages (no external QR dependencies).
 
-<img src="../img/two_level_qr.png" alt="Block diagram" width="1000">
+<img src="https://s6.imgcdn.dev/YpDMVw.png" alt="Block diagram" width="1000">
 
 ## What is a Two-Level QR Code?
 
