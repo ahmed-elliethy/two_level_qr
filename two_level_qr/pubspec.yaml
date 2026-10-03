@@ -1,11 +1,14 @@
 name: two_level_qr
 description: >-
-  TwoLevelQR - A Dart SDK that implements a keyed two-level QR mode that hides a secret message during encoding of a QR.
-version: 0.1.1
+  TwoLevelQR - A Dart SDK that implements a keyed two-level QR mode that hides a secret message, optionally encrypted (AES-SIV, ChaCha20-Poly1305), during encoding of a QR.
+version: 0.2.0
 repository: https://github.com/ahmed-elliethy/two_level_qr
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.2.0 <4.0.0"
+
+dependencies:
+  pointycastle: ^4.0.0
 
 dev_dependencies:
   test: ^1.24.0

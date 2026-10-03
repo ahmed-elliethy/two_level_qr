@@ -99,7 +99,8 @@ abstract class MaskingPort {
 /// Port for rendering module layouts, placing data, and reading data from matrices.
 abstract class MatrixRendererPort {
   /// Creates the base matrix with function patterns and reserved regions.
-  ({QrMatrix matrix, ModuleRegistry registry}) createBaseMatrix(QrVersion version);
+  ({QrMatrix matrix, ModuleRegistry registry}) createBaseMatrix(
+      QrVersion version);
 
   /// Places data bits into the matrix along the standard 2-module zig-zag track.
   void placeData({

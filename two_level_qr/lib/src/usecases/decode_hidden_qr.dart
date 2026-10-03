@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../data/keyed_error_scheduler.dart';
+import '../decode_result.dart';
 import '../domain/hidden_message.dart';
 import '../domain/qr_matrix.dart';
 import '../domain/rs_block.dart';
@@ -26,6 +27,31 @@ class DecodeHiddenQr {
     QrMatrix matrix, {
     required String key,
     double ratio = 0.8,
+  }) {
+    final (public, rawErrorBytes) = extractChannel(
+      matrix,
+      key: key,
+      ratio: ratio,
+    );
+
+    // Parse the 2-byte length prefix and slice the payload.
+    final (hiddenBytes, hiddenText) = _parseHiddenPayload(rawErrorBytes);
+
+    return HiddenDecodeResult(
+      public: public,
+      rawErrorBytes: rawErrorBytes,
+      hiddenBytes: hiddenBytes,
+      hiddenText: hiddenText,
+    );
+  }
+
+  /// Decodes the public payload of [matrix] and returns it together with
+  /// every raw `raw ^ corrected` byte at the positions scheduled by [key] and
+  /// [ratio], in embedding order (length prefix first).
+  (DecodeResult, List<int>) extractChannel(
+    QrMatrix matrix, {
+    required String key,
+    required double ratio,
   }) {
     // 1. Decode the public payload normally and obtain corrected blocks.
     final public = _decodeQr.execute(matrix);
@@ -53,16 +79,7 @@ class DecodeHiddenQr {
       correctedBlocks: correctedBlocks,
       positions: positions,
     );
-
-    // 5. Parse the 2-byte length prefix and slice the payload.
-    final (hiddenBytes, hiddenText) = _parseHiddenPayload(rawErrorBytes);
-
-    return HiddenDecodeResult(
-      public: public,
-      rawErrorBytes: rawErrorBytes,
-      hiddenBytes: hiddenBytes,
-      hiddenText: hiddenText,
-    );
+    return (public, rawErrorBytes);
   }
 
   List<int> _extractErrorBytes({

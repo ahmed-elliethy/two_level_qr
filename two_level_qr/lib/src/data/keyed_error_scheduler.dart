@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../domain/rs_block.dart';
+import 'uint64.dart';
 
 /// A scheduled error position inside a single RS block.
 class HiddenErrorPosition {
@@ -146,26 +147,27 @@ class KeyedErrorScheduler {
   ///
   /// Including [ratio] in the seed ensures that two schedules with the same
   /// key but different ratios produce independent position sequences.
-  static int _deriveBlockSeed(String key, int blockIndex, double ratio) {
+  static Uint64 _deriveBlockSeed(String key, int blockIndex, double ratio) {
     final salt = 'two_level_qr_hidden_channel';
     final ratioString = ratio.toStringAsFixed(6);
     final bytes = utf8.encode('$salt\x00$key\x00$ratioString\x00$blockIndex');
     return _fnv1a64(bytes);
   }
 
-  /// FNV-1a 64-bit hash.
-  static int _fnv1a64(List<int> data) {
-    const fnvOffset = 0xcbf29ce484222325;
-    const fnvPrime = 0x100000001b3;
-    var hash = fnvOffset;
-    for (final byte in data) {
-      hash ^= byte & 0xFF;
-      hash = _mask64(hash * fnvPrime);
-    }
-    return hash == 0 ? fnvOffset : hash;
-  }
+  // FNV-1a 64-bit constants, split into 32-bit halves so they are
+  // representable on the web.
+  static const _fnvOffset = Uint64(0xcbf29ce4, 0x84222325);
+  static const _fnvPrime = Uint64(0x00000100, 0x000001b3);
 
-  static int _mask64(int value) => value & 0xFFFFFFFFFFFFFFFF;
+  /// FNV-1a 64-bit hash.
+  static Uint64 _fnv1a64(List<int> data) {
+    var hash = _fnvOffset;
+    for (final byte in data) {
+      hash = hash ^ Uint64(0, byte & 0xFF);
+      hash = hash * _fnvPrime;
+    }
+    return hash.isZero ? _fnvOffset : hash;
+  }
 
   static int _min(int a, int b) => a < b ? a : b;
 }
@@ -174,20 +176,24 @@ class KeyedErrorScheduler {
 ///
 /// Based on the variant by Sebastiano Vigna:
 /// `x ^= x >> 12; x ^= x << 25; x ^= x >> 27; return x * 0x2545F4914F6CDD1D;`
+///
+/// Implemented on [Uint64] so the sequence is identical on the VM and the web.
 class _Prng {
-  _Prng(int seed) : _state = seed == 0 ? 1 : (seed & 0xFFFFFFFFFFFFFFFF);
+  _Prng(Uint64 seed) : _state = seed.isZero ? const Uint64(0, 1) : seed;
 
-  int _state;
+  static const _multiplier = Uint64(0x2545F491, 0x4F6CDD1D);
 
-  /// Returns a 32-bit unsigned integer in `[0, 2^32)`.
+  Uint64 _state;
+
+  /// Returns a 32-bit unsigned integer in `[0, 2^32)`, reduced modulo
+  /// [maxExclusive] when it is positive.
   int nextInt(int? maxExclusive) {
     var x = _state;
-    x ^= x >>> 12;
-    x ^= x << 25;
-    x ^= x >>> 27;
-    x = x & 0xFFFFFFFFFFFFFFFF;
+    x = x ^ x.shr(12);
+    x = x ^ x.shl(25);
+    x = x ^ x.shr(27);
     _state = x;
-    final value = (x * 0x2545F4914F6CDD1D) & 0xFFFFFFFF;
+    final value = (x * _multiplier).low32;
     if (maxExclusive == null || maxExclusive <= 0) return value;
     return value % maxExclusive;
   }

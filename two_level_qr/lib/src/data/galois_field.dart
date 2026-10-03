@@ -33,7 +33,8 @@ class GaloisField256 {
   /// $\log_\alpha(value)$.
   int log(int value) {
     if (value == 0) {
-      throw ArgumentError.value(value, 'value', 'log(0) is undefined in GF(256)');
+      throw ArgumentError.value(
+          value, 'value', 'log(0) is undefined in GF(256)');
     }
     return _logTable[value];
   }

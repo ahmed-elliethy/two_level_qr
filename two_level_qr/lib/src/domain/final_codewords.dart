@@ -36,8 +36,7 @@ class FinalCodewords {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(remainderBitsCount, Object.hashAll(bytes));
+  int get hashCode => Object.hash(remainderBitsCount, Object.hashAll(bytes));
 
   @override
   String toString() =>

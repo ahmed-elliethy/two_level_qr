@@ -35,8 +35,8 @@ class RsBlock {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(blockIndex, Object.hashAll(dataCodewords), Object.hashAll(eccCodewords));
+  int get hashCode => Object.hash(
+      blockIndex, Object.hashAll(dataCodewords), Object.hashAll(eccCodewords));
 
   @override
   String toString() =>

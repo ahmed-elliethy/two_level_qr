@@ -4,7 +4,8 @@ import 'error_correction_level.dart';
 /// A QR symbol version (1..40) plus the capacity arithmetic that depends on
 /// it. First-class checkpoint used by every stage of the pipeline.
 class QrVersion {
-  const QrVersion(this.number) : assert(number >= 1 && number <= 40, 'Version must be in 1..40');
+  const QrVersion(this.number)
+      : assert(number >= 1 && number <= 40, 'Version must be in 1..40');
 
   /// Version number, 1-based (1..40).
   final int number;
@@ -42,7 +43,8 @@ class QrVersion {
   String toString() => 'QrVersion($number)';
 
   @override
-  bool operator ==(Object other) => other is QrVersion && other.number == number;
+  bool operator ==(Object other) =>
+      other is QrVersion && other.number == number;
 
   @override
   int get hashCode => number.hashCode;

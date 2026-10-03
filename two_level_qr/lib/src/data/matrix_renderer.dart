@@ -20,7 +20,8 @@ class MatrixRenderer implements MatrixRendererPort {
   final VersionInfoCodecPort versionCodec;
 
   @override
-  ({QrMatrix matrix, ModuleRegistry registry}) createBaseMatrix(QrVersion version) {
+  ({QrMatrix matrix, ModuleRegistry registry}) createBaseMatrix(
+      QrVersion version) {
     final size = version.size;
     final matrix = QrMatrix.allLight(size);
     final registry = ModuleRegistry(size);
@@ -89,7 +90,8 @@ class MatrixRenderer implements MatrixRendererPort {
         for (var c = 0; c < 2; c++) {
           final px = x - c;
           if (!registry.isReserved(px, y)) {
-            final isDark = (bitIndex < bits.length) ? (bits[bitIndex++] == 1) : false;
+            final isDark =
+                (bitIndex < bits.length) ? (bits[bitIndex++] == 1) : false;
             matrix.setDark(px, y, dark: isDark);
           }
         }
@@ -247,7 +249,8 @@ class MatrixRenderer implements MatrixRendererPort {
     }
   }
 
-  void _placeFinderAndSeparator(QrMatrix matrix, ModuleRegistry registry, int x0, int y0) {
+  void _placeFinderAndSeparator(
+      QrMatrix matrix, ModuleRegistry registry, int x0, int y0) {
     // 7x7 finder pattern + 1 module light separator
     for (var dy = -1; dy <= 7; dy++) {
       for (var dx = -1; dx <= 7; dx++) {
@@ -259,7 +262,11 @@ class MatrixRenderer implements MatrixRendererPort {
 
         if (dx >= 0 && dx < 7 && dy >= 0 && dy < 7) {
           // Inside 7x7 Finder
-          if (dx == 0 || dx == 6 || dy == 0 || dy == 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4)) {
+          if (dx == 0 ||
+              dx == 6 ||
+              dy == 0 ||
+              dy == 6 ||
+              (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4)) {
             matrix.setDark(x, y, dark: true);
           } else {
             matrix.setDark(x, y, dark: false);
@@ -272,7 +279,8 @@ class MatrixRenderer implements MatrixRendererPort {
     }
   }
 
-  void _placeAlignmentPattern(QrMatrix matrix, ModuleRegistry registry, int cx, int cy) {
+  void _placeAlignmentPattern(
+      QrMatrix matrix, ModuleRegistry registry, int cx, int cy) {
     for (var dy = -2; dy <= 2; dy++) {
       for (var dx = -2; dx <= 2; dx++) {
         final x = cx + dx;

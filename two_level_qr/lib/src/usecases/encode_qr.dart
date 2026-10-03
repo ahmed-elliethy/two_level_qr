@@ -166,7 +166,8 @@ class EncodeQr {
     return [Segment.byte(utf8.encode(text))];
   }
 
-  QrVersion _findVersionForSegments(List<Segment> segments, ErrorCorrectionLevel level) {
+  QrVersion _findVersionForSegments(
+      List<Segment> segments, ErrorCorrectionLevel level) {
     for (var v = 1; v <= 40; v++) {
       final version = QrVersion(v);
       final cap = dataCodewordsCapacity(v, level);
@@ -203,10 +204,12 @@ class EncodeQr {
         return version;
       }
     }
-    throw ArgumentError('Input payload is too large to fit in any QR Code version for level ${level.label}');
+    throw ArgumentError(
+        'Input payload is too large to fit in any QR Code version for level ${level.label}');
   }
 
-  List<RsBlock> _reconstructBlocks(DataCodewords dataCodewords, QrVersion version, ErrorCorrectionLevel level) {
+  List<RsBlock> _reconstructBlocks(DataCodewords dataCodewords,
+      QrVersion version, ErrorCorrectionLevel level) {
     final vNum = version.number;
     final structure = blockStructure(vNum, level);
     final count1 = structure[0];
@@ -222,8 +225,10 @@ class EncodeQr {
       final len = (b < count1) ? data1 : data2;
       final blockData = dataCodewords.bytes.sublist(offset, offset + len);
       offset += len;
-      final ecc = rsCodec.generateEcc(data: blockData, eccCodewordsCount: ecPer);
-      blocks.add(RsBlock(blockIndex: b, dataCodewords: blockData, eccCodewords: ecc.bytes));
+      final ecc =
+          rsCodec.generateEcc(data: blockData, eccCodewordsCount: ecPer);
+      blocks.add(RsBlock(
+          blockIndex: b, dataCodewords: blockData, eccCodewords: ecc.bytes));
     }
     return blocks;
   }
