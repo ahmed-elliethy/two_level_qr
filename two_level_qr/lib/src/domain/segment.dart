@@ -32,12 +32,10 @@ class Segment {
       Segment._(Mode.byte, null, List<int>.unmodifiable(bytes));
 
   /// Byte segment from a string encoded as UTF-8.
-  factory Segment.byteFromUtf8(String text) =>
-      Segment.byte(utf8Encode(text));
+  factory Segment.byteFromUtf8(String text) => Segment.byte(utf8Encode(text));
 
   /// Kanji segment (input assumed to be representable in Shift-JIS).
-  factory Segment.kanji(String text) =>
-      Segment._(Mode.kanji, text, null);
+  factory Segment.kanji(String text) => Segment._(Mode.kanji, text, null);
 
   final Mode mode;
 

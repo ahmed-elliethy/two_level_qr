@@ -40,42 +40,83 @@ class EncodeHiddenQr {
     int? explicitVersion,
     MaskPattern? explicitMask,
   }) {
-    // 1. Build hidden payload: 2-byte length prefix + UTF-8 bytes.
+    // Build hidden payload: 2-byte length prefix + UTF-8 bytes.
     final hiddenUtf8 = utf8.encode(hiddenText);
-    if (hiddenUtf8.length > 0xFFFF) {
+    return executeWithPayload(
+      publicText: publicText,
+      hiddenText: hiddenText,
+      payload: hiddenUtf8,
+      options: options,
+      level: level,
+      explicitVersion: explicitVersion,
+      explicitMask: explicitMask,
+    );
+  }
+
+  /// Embeds an arbitrary [payload] (for example an encrypted envelope) in
+  /// the hidden channel of a QR code carrying [publicText].
+  ///
+  /// The channel bytes are `[len_hi, len_lo] || payload`, scheduled at
+  /// key-derived positions and limited per block by [HiddenEncodeOptions.ratio].
+  /// [hiddenText] is only recorded in the returned [EncodeResult].
+  ///
+  /// [userPayloadBytes] and [overheadBytes] describe how [payload] splits into
+  /// the caller's message and framing/cipher overhead; they are used only in
+  /// capacity error messages. By default the whole payload is the message.
+  ///
+  /// Version selection follows [execute]: with [explicitVersion] a payload
+  /// that does not fit throws an [ArgumentError]; otherwise versions are
+  /// tried upward to 40 and [HiddenMessageCapacityException] is thrown if
+  /// none fits.
+  EncodeResult executeWithPayload({
+    required String publicText,
+    required String hiddenText,
+    required List<int> payload,
+    required HiddenEncodeOptions options,
+    ErrorCorrectionLevel level = ErrorCorrectionLevel.high,
+    int? explicitVersion,
+    MaskPattern? explicitMask,
+    int? userPayloadBytes,
+    int overheadBytes = 0,
+    int? hiddenCipherSchemeId,
+  }) {
+    if (payload.length > 0xFFFF) {
       throw ArgumentError(
-        'Hidden message is too long: ${hiddenUtf8.length} bytes (max 65535).',
+        'Hidden message is too long: ${payload.length} bytes (max 65535).',
       );
     }
     final hiddenBytes = <int>[
-      (hiddenUtf8.length >> 8) & 0xFF,
-      hiddenUtf8.length & 0xFF,
-      ...hiddenUtf8,
+      (payload.length >> 8) & 0xFF,
+      payload.length & 0xFF,
+      ...payload,
     ];
+    final sizes = _PayloadSizes(
+      userBytes: userPayloadBytes ?? payload.length,
+      overheadBytes: overheadBytes,
+      totalBytes: hiddenBytes.length,
+    );
 
-    // 2. Determine the minimum version required for the public payload.
+    // 1. Determine the minimum version required for the public payload.
     final minVersion = _findMinimumVersion(
       publicText: publicText,
       level: level,
       explicitVersion: explicitVersion,
     );
 
-    // 3. Try encoding, bumping the version if the hidden message doesn't fit.
+    // 2. Try encoding, bumping the version if the hidden message doesn't fit.
     if (explicitVersion != null) {
       return _tryEncodeVersion(
         publicText: publicText,
         hiddenText: hiddenText,
         hiddenBytes: hiddenBytes,
+        sizes: sizes,
         options: options,
         level: level,
         version: minVersion,
         explicitMask: explicitMask,
+        hiddenCipherSchemeId: hiddenCipherSchemeId,
       );
     }
-
-    // Compute the absolute maximum capacity at version 40 for the selected
-    // level and ratio, so we can produce a meaningful error if needed.
-    final maxCapacity = _maxCapacityAtV40(options: options, level: level);
 
     for (var v = minVersion.number; v <= 40; v++) {
       try {
@@ -83,22 +124,25 @@ class EncodeHiddenQr {
           publicText: publicText,
           hiddenText: hiddenText,
           hiddenBytes: hiddenBytes,
+          sizes: sizes,
           options: options,
           level: level,
           version: QrVersion(v),
           explicitMask: explicitMask,
+          hiddenCipherSchemeId: hiddenCipherSchemeId,
         );
-      } on ArgumentError {
+      } on _HiddenCapacityError {
         // Capacity exceeded at this version; try the next one.
       }
     }
 
     throw HiddenMessageCapacityException(
-      hiddenPayloadBytes: hiddenBytes.length - 2,
-      totalHiddenBytes: hiddenBytes.length,
-      maxCapacityBytes: maxCapacity,
+      hiddenPayloadBytes: sizes.userBytes,
+      totalHiddenBytes: sizes.totalBytes,
+      maxCapacityBytes: _maxCapacityAtV40(options: options, level: level),
       level: level,
       ratio: options.ratio,
+      overheadBytes: overheadBytes,
     );
   }
 
@@ -106,7 +150,8 @@ class EncodeHiddenQr {
     required HiddenEncodeOptions options,
     required ErrorCorrectionLevel level,
   }) {
-    final scheduler = KeyedErrorScheduler(key: options.key, ratio: options.ratio);
+    final scheduler =
+        KeyedErrorScheduler(key: options.key, ratio: options.ratio);
     final clean = _encodeQr.execute(
       text: 'x',
       level: level,
@@ -131,10 +176,12 @@ class EncodeHiddenQr {
     required String publicText,
     required String hiddenText,
     required List<int> hiddenBytes,
+    required _PayloadSizes sizes,
     required HiddenEncodeOptions options,
     required ErrorCorrectionLevel level,
     required QrVersion version,
     MaskPattern? explicitMask,
+    int? hiddenCipherSchemeId,
   }) {
     // 1. Encode the public payload normally to obtain clean RS blocks.
     final clean = _encodeQr.execute(
@@ -150,7 +197,17 @@ class EncodeHiddenQr {
       ratio: options.ratio,
     );
 
-    // 2. Schedule key-dependent positions and verify capacity.
+    // 2. Verify capacity, then schedule key-dependent positions.
+    final capacity = scheduler.computeCapacity(blocks).totalBytes;
+    if (sizes.totalBytes > capacity) {
+      throw _HiddenCapacityError(
+        'Hidden channel needs ${sizes.totalBytes} bytes '
+        '(${sizes.userBytes} message + 2 length prefix'
+        '${sizes.overheadBytes > 0 ? ' + ${sizes.overheadBytes} encryption overhead' : ''}'
+        '), but v${version.number}-${level.label} at ratio ${options.ratio} '
+        'holds only $capacity bytes.',
+      );
+    }
     final positions = scheduler.schedulePositions(
       blocks: blocks,
       count: hiddenBytes.length,
@@ -186,6 +243,7 @@ class EncodeHiddenQr {
       matrix: stegoMatrix,
       hiddenText: hiddenText,
       hiddenBytes: hiddenBytes,
+      hiddenCipherSchemeId: hiddenCipherSchemeId,
     );
   }
 
@@ -249,4 +307,22 @@ class EncodeHiddenQr {
 
     return base.matrix;
   }
+}
+
+/// Capacity overflow at one version; distinct from other [ArgumentError]s so
+/// the automatic version search only retries on capacity problems.
+class _HiddenCapacityError extends ArgumentError {
+  _HiddenCapacityError(super.message);
+}
+
+class _PayloadSizes {
+  const _PayloadSizes({
+    required this.userBytes,
+    required this.overheadBytes,
+    required this.totalBytes,
+  });
+
+  final int userBytes;
+  final int overheadBytes;
+  final int totalBytes;
 }

@@ -33,7 +33,8 @@ class BlockInterleaver implements BlockInterleaverPort {
 
     for (var b = 0; b < totalBlocks; b++) {
       final blockDataLen = (b < count1) ? data1 : data2;
-      final blockData = dataCodewords.bytes.sublist(dataOffset, dataOffset + blockDataLen);
+      final blockData =
+          dataCodewords.bytes.sublist(dataOffset, dataOffset + blockDataLen);
       dataOffset += blockDataLen;
 
       final ecc = rsCodec.generateEcc(
@@ -111,7 +112,8 @@ class BlockInterleaver implements BlockInterleaverPort {
         final blockTargetLen = (b < count1) ? data1 : data2;
         if (i < blockTargetLen) {
           if (rawOffset >= rawCodewords.length) {
-            throw FormatException('Truncated raw codewords during data de-interleaving');
+            throw FormatException(
+                'Truncated raw codewords during data de-interleaving');
           }
           blockDataLists[b].add(rawCodewords[rawOffset++]);
         }
@@ -122,7 +124,8 @@ class BlockInterleaver implements BlockInterleaverPort {
     for (var i = 0; i < ecPer; i++) {
       for (var b = 0; b < totalBlocks; b++) {
         if (rawOffset >= rawCodewords.length) {
-          throw FormatException('Truncated raw codewords during ECC de-interleaving');
+          throw FormatException(
+              'Truncated raw codewords during ECC de-interleaving');
         }
         blockEccLists[b].add(rawCodewords[rawOffset++]);
       }
@@ -158,7 +161,9 @@ class BlockInterleaver implements BlockInterleaverPort {
       );
     }
 
-    final maxDataLen = count2 > 0 ? blocks.last.dataCodewords.length : blocks.first.dataCodewords.length;
+    final maxDataLen = count2 > 0
+        ? blocks.last.dataCodewords.length
+        : blocks.first.dataCodewords.length;
     final interleavedBytes = <int>[];
 
     // 1. Interleave data codewords across all blocks

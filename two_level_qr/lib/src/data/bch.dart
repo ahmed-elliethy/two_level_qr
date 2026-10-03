@@ -27,7 +27,8 @@ class BchCodec {
   /// Encodes 5-bit format data into 15-bit BCH codeword with 0x5412 mask applied.
   static int encodeFormat(int data5) {
     if (data5 < 0 || data5 > 31) {
-      throw ArgumentError.value(data5, 'data5', 'Format data must be 5 bits (0..31)');
+      throw ArgumentError.value(
+          data5, 'data5', 'Format data must be 5 bits (0..31)');
     }
     var bits = data5 << 10;
     while (_numBits(bits) > 10) {
@@ -61,7 +62,8 @@ class BchCodec {
   /// Encodes a 6-bit version number (7..40) into 18-bit BCH codeword.
   static int encodeVersion(int versionNumber) {
     if (versionNumber < 7 || versionNumber > 40) {
-      throw ArgumentError.value(versionNumber, 'versionNumber', 'Version info applies to versions 7..40');
+      throw ArgumentError.value(versionNumber, 'versionNumber',
+          'Version info applies to versions 7..40');
     }
     var bits = versionNumber << 12;
     while (_numBits(bits) > 12) {

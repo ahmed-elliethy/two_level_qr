@@ -1,5 +1,6 @@
 import '../decode_result.dart';
 import 'error_correction_level.dart';
+import 'hidden_cipher.dart';
 
 /// Thrown when a hidden message cannot fit in the largest QR version (40)
 /// for the chosen error-correction level and ratio.
@@ -10,14 +11,20 @@ class HiddenMessageCapacityException implements Exception {
     required this.maxCapacityBytes,
     required this.level,
     required this.ratio,
+    this.overheadBytes = 0,
   });
 
   /// Length of the user-provided hidden payload in bytes (excluding the
-  /// 2-byte length prefix).
+  /// 2-byte length prefix and any encryption overhead).
   final int hiddenPayloadBytes;
 
-  /// Total hidden-channel bytes required, including the 2-byte length prefix.
+  /// Total hidden-channel bytes required, including the 2-byte length prefix
+  /// and [overheadBytes].
   final int totalHiddenBytes;
+
+  /// Encryption overhead in bytes (scheme byte + cipher nonce/tag); `0` for
+  /// plaintext hidden messages.
+  final int overheadBytes;
 
   /// Maximum number of hidden-channel bytes available at QR version 40 with
   /// the selected [level] and [ratio].
@@ -33,7 +40,8 @@ class HiddenMessageCapacityException implements Exception {
   String toString() {
     return 'HiddenMessageCapacityException: hidden message is too large '
         '($hiddenPayloadBytes payload bytes / $totalHiddenBytes total bytes, '
-        'including the 2-byte length prefix). '
+        'including the 2-byte length prefix'
+        '${overheadBytes > 0 ? ' and $overheadBytes bytes of encryption overhead' : ''}). '
         'Maximum capacity at QR version 40, level ${level.label}, ratio $ratio '
         'is $maxCapacityBytes bytes. Try a shorter hidden message, a higher '
         'error-correction level, or a larger ratio.';
@@ -106,4 +114,38 @@ class HiddenDecodeResult {
   @override
   String toString() =>
       'HiddenDecodeResult(public="${public.text}", hiddenBytes=${hiddenBytes.length})';
+}
+
+/// Result of decoding an encrypted two-level QR code.
+///
+/// Only produced when the hidden payload authenticated successfully; every
+/// failure is reported as a [HiddenMessageCryptoException] instead.
+class EncryptedHiddenDecodeResult {
+  const EncryptedHiddenDecodeResult({
+    required this.public,
+    required this.schemeId,
+    required this.cipherName,
+    required this.hiddenBytes,
+    required this.hiddenText,
+  });
+
+  /// The public QR payload (Level 1).
+  final DecodeResult public;
+
+  /// Scheme ID read from the hidden-channel header.
+  final int schemeId;
+
+  /// Name of the cipher that decrypted the payload.
+  final String cipherName;
+
+  /// Decrypted hidden message bytes (UTF-8).
+  final List<int> hiddenBytes;
+
+  /// Decrypted hidden message.
+  final String hiddenText;
+
+  @override
+  String toString() =>
+      'EncryptedHiddenDecodeResult(public="${public.text}", cipher=$cipherName, '
+      'hiddenBytes=${hiddenBytes.length})';
 }

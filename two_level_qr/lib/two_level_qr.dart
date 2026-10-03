@@ -15,6 +15,7 @@ export 'src/domain/qr_matrix.dart';
 export 'src/domain/mode.dart';
 export 'src/domain/segment.dart';
 export 'src/domain/hidden_message.dart';
+export 'src/domain/hidden_cipher.dart';
 
 // ---- Domain: pipeline checkpoints (first-class values) ----------------------
 export 'src/domain/data_codewords.dart';
@@ -48,6 +49,8 @@ export 'src/usecases/encode_qr.dart';
 export 'src/usecases/decode_qr.dart';
 export 'src/usecases/encode_hidden_qr.dart';
 export 'src/usecases/decode_hidden_qr.dart';
+export 'src/usecases/encode_encrypted_hidden_qr.dart';
+export 'src/usecases/decode_encrypted_hidden_qr.dart';
 
 // ---- Public result types ----------------------------------------------------
 export 'src/encode_result.dart';
@@ -56,3 +59,8 @@ export 'src/two_level_qr.dart';
 
 // ---- Hidden-channel services ------------------------------------------------
 export 'src/data/keyed_error_scheduler.dart';
+
+// ---- Hidden-message encryption ----------------------------------------------
+export 'src/data/ciphers/aes_siv.dart';
+export 'src/data/ciphers/chacha20_poly1305_cipher.dart';
+export 'src/data/ciphers/passphrase_kdf.dart';

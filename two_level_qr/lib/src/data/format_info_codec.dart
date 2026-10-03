@@ -23,7 +23,8 @@ class FormatInfoCodec implements FormatInfoCodecPort {
   FormatInfo decode(int formatBits) {
     final data5 = BchCodec.decodeFormat(formatBits);
     if (data5 == null) {
-      throw FormatException('Invalid or uncorrectable format information bits: 0x${formatBits.toRadixString(16)}');
+      throw FormatException(
+          'Invalid or uncorrectable format information bits: 0x${formatBits.toRadixString(16)}');
     }
     final levelBits = (data5 >> 3) & 0x03;
     final maskBits = data5 & 0x07;

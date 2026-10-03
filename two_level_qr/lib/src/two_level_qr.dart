@@ -1,11 +1,14 @@
 import 'dart:convert';
 
+import 'data/ciphers/aes_siv.dart';
+import 'data/ciphers/passphrase_kdf.dart';
 import 'decode_result.dart';
 import 'domain/corrected_codewords.dart';
 import 'domain/data_codewords.dart';
 import 'domain/error_correction_level.dart';
 import 'domain/final_codewords.dart';
 import 'domain/format_info.dart';
+import 'domain/hidden_cipher.dart';
 import 'domain/hidden_message.dart';
 import 'domain/mask_pattern.dart';
 import 'domain/mode.dart';
@@ -16,9 +19,12 @@ import 'domain/segment.dart';
 import 'domain/version.dart';
 import 'domain/version_info.dart';
 import 'encode_result.dart';
+import 'usecases/decode_encrypted_hidden_qr.dart';
 import 'usecases/decode_hidden_qr.dart';
 import 'usecases/decode_qr.dart';
+import 'usecases/encode_encrypted_hidden_qr.dart';
 import 'usecases/encode_hidden_qr.dart';
+import 'usecases/hidden_envelope.dart';
 import 'usecases/encode_qr.dart';
 
 /// TwoLevelQR main SDK facade.
@@ -31,15 +37,23 @@ class TwoLevelQr {
     DecodeQr? decodeQr,
     EncodeHiddenQr? encodeHiddenQr,
     DecodeHiddenQr? decodeHiddenQr,
+    EncodeEncryptedHiddenQr? encodeEncryptedHiddenQr,
+    DecodeEncryptedHiddenQr? decodeEncryptedHiddenQr,
   })  : _encodeQr = encodeQr ?? EncodeQr(),
         _decodeQr = decodeQr ?? DecodeQr(),
         _encodeHiddenQr = encodeHiddenQr ?? EncodeHiddenQr(),
-        _decodeHiddenQr = decodeHiddenQr ?? DecodeHiddenQr();
+        _decodeHiddenQr = decodeHiddenQr ?? DecodeHiddenQr(),
+        _encodeEncryptedHiddenQr =
+            encodeEncryptedHiddenQr ?? EncodeEncryptedHiddenQr(),
+        _decodeEncryptedHiddenQr =
+            decodeEncryptedHiddenQr ?? DecodeEncryptedHiddenQr();
 
   final EncodeQr _encodeQr;
   final DecodeQr _decodeQr;
   final EncodeHiddenQr _encodeHiddenQr;
   final DecodeHiddenQr _decodeHiddenQr;
+  final EncodeEncryptedHiddenQr _encodeEncryptedHiddenQr;
+  final DecodeEncryptedHiddenQr _decodeEncryptedHiddenQr;
 
   /// Default singleton instance.
   static final TwoLevelQr instance = TwoLevelQr();
@@ -70,6 +84,12 @@ class TwoLevelQr {
 
   /// Encodes [publicText] as the normal QR payload and hides [hiddenText]
   /// inside the Reed-Solomon error channel using [key].
+  ///
+  /// [key] is the *position key*: it only decides where the hidden bytes
+  /// go. The bytes themselves are not encrypted, and anyone who runs
+  /// Reed-Solomon correction can see them (in scrambled order). Use
+  /// [encodeWithEncryptedHiddenMessage] when the hidden message must stay
+  /// confidential.
   ///
   /// See [HiddenEncodeOptions] for the configurable [ratio] (default `0.8`).
   static EncodeResult encodeWithHiddenMessage({
@@ -105,6 +125,101 @@ class TwoLevelQr {
       matrix,
       key: key,
       ratio: ratio,
+    );
+  }
+
+  /// Encodes [publicText] as the normal QR payload and hides [hiddenText],
+  /// encrypted with [cipher], inside the Reed-Solomon error channel.
+  ///
+  /// * [positionKey] decides *where* the hidden bytes go (like `key` in
+  ///   [encodeWithHiddenMessage]).
+  /// * [encryptionPassphrase] protects *what* they say. It must differ from
+  ///   [positionKey].
+  /// * [cipher] defaults to [AesSivCipher]. Its scheme ID is written into
+  ///   the QR so the receiver knows which cipher to use.
+  /// * [ratio] limits the hidden errors per block exactly as in plaintext
+  ///   mode; the length prefix, scheme byte and cipher overhead all count
+  ///   against it. See [hiddenMessageCapacity].
+  /// * [kdfIterations] sets the PBKDF2 iteration count of the default
+  ///   cipher (default [PassphraseKdf.defaultIterations]). It is ignored when
+  ///   [cipher] is given; configure that cipher directly instead. The decoder
+  ///   must use the same value.
+  static EncodeResult encodeWithEncryptedHiddenMessage({
+    required String publicText,
+    required String hiddenText,
+    required String positionKey,
+    required String encryptionPassphrase,
+    HiddenMessageCipher? cipher,
+    int kdfIterations = PassphraseKdf.defaultIterations,
+    double ratio = 0.8,
+    ErrorCorrectionLevel level = ErrorCorrectionLevel.high,
+    int? explicitVersion,
+    MaskPattern? explicitMask,
+  }) {
+    return instance._encodeEncryptedHiddenQr.execute(
+      publicText: publicText,
+      hiddenText: hiddenText,
+      positionKey: positionKey,
+      encryptionPassphrase: encryptionPassphrase,
+      cipher: cipher ?? AesSivCipher(iterations: kdfIterations),
+      ratio: ratio,
+      level: level,
+      explicitVersion: explicitVersion,
+      explicitMask: explicitMask,
+    );
+  }
+
+  /// Decodes a two-level QR [matrix] and decrypts its hidden message.
+  ///
+  /// [positionKey], [encryptionPassphrase] and [ratio] must match the
+  /// encoder. [ciphers] lists the accepted schemes; the scheme ID stored in
+  /// the QR picks one of them. By default the built-in AES-SIV and (on
+  /// native platforms) ChaCha20-Poly1305 ciphers are accepted, configured
+  /// with [kdfIterations], which must match the encoder's value.
+  ///
+  /// Throws a [HiddenMessageCryptoException] on any failure and never falls
+  /// back to plaintext.
+  static EncryptedHiddenDecodeResult decodeWithEncryptedHiddenMessage(
+    QrMatrix matrix, {
+    required String positionKey,
+    required String encryptionPassphrase,
+    double ratio = 0.8,
+    List<HiddenMessageCipher>? ciphers,
+    int kdfIterations = PassphraseKdf.defaultIterations,
+  }) {
+    return instance._decodeEncryptedHiddenQr.execute(
+      matrix,
+      positionKey: positionKey,
+      encryptionPassphrase: encryptionPassphrase,
+      ratio: ratio,
+      ciphers:
+          ciphers ?? HiddenEnvelope.defaultCiphers(iterations: kdfIterations),
+    );
+  }
+
+  /// Largest hidden message, in UTF-8 bytes, that fits in a QR of [version]
+  /// and [level] at [ratio].
+  ///
+  /// With [cipher] `null` this is plaintext mode (channel capacity minus the
+  /// 2-byte length prefix). With a cipher it also subtracts the scheme byte
+  /// and `cipher.overhead`.
+  static int hiddenMessageCapacity({
+    required int version,
+    required ErrorCorrectionLevel level,
+    double ratio = 0.8,
+    HiddenMessageCipher? cipher,
+  }) {
+    if (version < 1 || version > 40) {
+      throw RangeError.range(version, 1, 40, 'version');
+    }
+    if (!(ratio > 0.0 && ratio <= 1.0)) {
+      throw ArgumentError.value(ratio, 'ratio', 'must be in (0.0, 1.0]');
+    }
+    return HiddenEnvelope.messageCapacity(
+      version: version,
+      level: level,
+      ratio: ratio,
+      cipher: cipher,
     );
   }
 
@@ -154,7 +269,8 @@ class TwoLevelQr {
         data: blockData,
         eccCodewordsCount: ecPer,
       );
-      blocks.add(RsBlock(blockIndex: b, dataCodewords: blockData, eccCodewords: ecc.bytes));
+      blocks.add(RsBlock(
+          blockIndex: b, dataCodewords: blockData, eccCodewords: ecc.bytes));
     }
     return blocks;
   }
@@ -173,8 +289,12 @@ class TwoLevelQr {
       );
 
   /// Stage 5: finalCodewords → place+mask → matrix
-  static ({QrMatrix matrix, MaskPattern maskPattern, FormatInfo formatInfo, VersionInfo? versionInfo})
-      stage5PlaceAndMaskMatrix({
+  static ({
+    QrMatrix matrix,
+    MaskPattern maskPattern,
+    FormatInfo formatInfo,
+    VersionInfo? versionInfo
+  }) stage5PlaceAndMaskMatrix({
     required FinalCodewords finalCodewords,
     required QrVersion version,
     required ErrorCorrectionLevel level,
@@ -210,7 +330,8 @@ class TwoLevelQr {
       pattern: maskPattern,
     );
 
-    final formatInfo = instance._encodeQr.formatCodec.encode(level, maskPattern);
+    final formatInfo =
+        instance._encodeQr.formatCodec.encode(level, maskPattern);
     instance._encodeQr.matrixRenderer.placeFormatInfo(
       matrix: base_.matrix,
       formatInfo: formatInfo,
@@ -230,8 +351,12 @@ class TwoLevelQr {
   // ===========================================================================
 
   /// Stage 1: matrix → unmask (reads format/version info and reverses mask)
-  static ({FormatInfo formatInfo, VersionInfo? versionInfo, QrMatrix unmaskedMatrix, QrVersion version})
-      stage1UnmaskMatrix(QrMatrix matrix) {
+  static ({
+    FormatInfo formatInfo,
+    VersionInfo? versionInfo,
+    QrMatrix unmaskedMatrix,
+    QrVersion version
+  }) stage1UnmaskMatrix(QrMatrix matrix) {
     final size = matrix.size;
     if (size < 21 || (size - 17) % 4 != 0) {
       throw FormatException('Invalid QR matrix dimension: ${size}x$size');
@@ -241,7 +366,8 @@ class TwoLevelQr {
     var version = QrVersion(vNum);
 
     final formatInfo = instance._decodeQr.matrixRenderer.readFormatInfo(matrix);
-    final versionInfo = instance._decodeQr.matrixRenderer.readVersionInfo(matrix, size);
+    final versionInfo =
+        instance._decodeQr.matrixRenderer.readVersionInfo(matrix, size);
     if (versionInfo != null) {
       version = versionInfo.version;
     }

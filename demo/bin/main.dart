@@ -4,9 +4,11 @@ import 'package:two_level_qr/two_level_qr.dart';
 import 'package:two_level_qr_cli/benchmarks/benchmark_runner.dart';
 import 'package:two_level_qr_cli/demos/checkpoint_inspector.dart';
 import 'package:two_level_qr_cli/demos/corruption_demo.dart';
+import 'package:two_level_qr_cli/demos/encrypted_hidden_message_demo.dart';
 import 'package:two_level_qr_cli/demos/hidden_message_demo.dart';
 import 'package:two_level_qr_cli/demos/pipeline_stage_stepper.dart';
 import 'package:two_level_qr_cli/suites/e2e_stress_tests.dart';
+import 'package:two_level_qr_cli/suites/encrypted_hidden_message_tests.dart';
 import 'package:two_level_qr_cli/suites/hidden_message_tests.dart';
 import 'package:two_level_qr_cli/suites/math_and_codec_tests.dart';
 import 'package:two_level_qr_cli/terminal_utils.dart';
@@ -23,7 +25,11 @@ void main(List<String> arguments) {
     ..addFlag('hidden-demo', negatable: false, help: 'Run keyed two-level QR hidden-message demo.')
     ..addOption('hidden-encode', help: 'Encode public text with a hidden message (requires --hidden-text and --key).')
     ..addOption('hidden-text', defaultsTo: 'SECRET_KEY_12345', help: 'Hidden secret message for two-level encode.')
-    ..addOption('key', defaultsTo: 'my-secret-key', help: 'Secret key controlling hidden error positions.')
+    ..addFlag('encrypted-demo', negatable: false, help: 'Run the encrypted two-level QR hidden-message demo.')
+    ..addOption('encrypted-encode', help: 'Encode public text with an ENCRYPTED hidden message (uses --hidden-text, --position-key, --encryption-passphrase, --cipher).')
+    ..addOption('position-key', aliases: ['key'], defaultsTo: 'my-secret-key', help: 'Secret key controlling WHERE hidden errors go (alias: --key).')
+    ..addOption('encryption-passphrase', defaultsTo: 'my-encryption-passphrase', help: 'Passphrase that encrypts WHAT the hidden errors say (encrypted mode).')
+    ..addOption('cipher', defaultsTo: 'aes-siv', allowed: ['aes-siv', 'chacha20'], help: 'Cipher for encrypted mode.')
     ..addOption('ratio', defaultsTo: '0.8', help: 'Fraction of RS error budget used for hidden data (0.0..1.0].')
     ..addOption('level', abbr: 'l', defaultsTo: 'H', help: 'Error Correction Level: L, M, Q, or H.')
     ..addOption('flips', abbr: 'f', defaultsTo: '6', help: 'Number of matrix module errors to inject (0..10).')
@@ -127,11 +133,41 @@ void main(List<String> arguments) {
   if (results['hidden-encode'] != null) {
     final publicText = results['hidden-encode'] as String;
     final hiddenText = results['hidden-text'] as String;
-    final key = results['key'] as String;
+    final key = results['position-key'] as String;
     _runHiddenEncode(
       publicText: publicText.isEmpty ? 'https://example.com/public-info' : publicText,
       hiddenText: hiddenText,
       key: key,
+      ratio: ratio,
+      level: level,
+      explicitVersion: explicitVersion,
+      explicitMask: explicitMask,
+    );
+    return;
+  }
+
+  // 9. Encrypted Hidden Message Demo
+  if (results['encrypted-demo'] as bool) {
+    EncryptedHiddenMessageDemo.runDemo(
+      hiddenText: results['hidden-text'] as String,
+      positionKey: results['position-key'] as String,
+      encryptionPassphrase: results['encryption-passphrase'] as String,
+      cipherName: results['cipher'] as String,
+      ratio: ratio,
+      level: level,
+    );
+    return;
+  }
+
+  // 10. Encrypted Hidden Message Encode
+  if (results['encrypted-encode'] != null) {
+    final publicText = results['encrypted-encode'] as String;
+    _runEncryptedEncode(
+      publicText: publicText.isEmpty ? 'https://example.com/public-info' : publicText,
+      hiddenText: results['hidden-text'] as String,
+      positionKey: results['position-key'] as String,
+      encryptionPassphrase: results['encryption-passphrase'] as String,
+      cipher: EncryptedHiddenMessageDemo.parseCipher(results['cipher'] as String),
       ratio: ratio,
       level: level,
       explicitVersion: explicitVersion,
@@ -145,15 +181,17 @@ void main(List<String> arguments) {
 }
 
 void _printHelp(ArgParser parser) {
-  TerminalUtils.printHeader('TwoLevelQR CLI Test & Demo Harness', subtitle: 'v0.1.0 — Clean Architecture QR Code SDK');
+  TerminalUtils.printHeader('TwoLevelQR CLI Test & Demo Harness', subtitle: 'v0.2.0 — Clean Architecture QR Code SDK');
   stdout.writeln('\nUsage: dart run bin/main.dart [options]\n');
   stdout.writeln(parser.usage);
   stdout.writeln('\nExamples:');
   stdout.writeln('  dart run bin/main.dart --pipeline-step "Stage Test" --level H --flips 6');
   stdout.writeln('  dart run bin/main.dart --suite');
   stdout.writeln('  dart run bin/main.dart --encode "https://example.com" --level H');
-  stdout.writeln('  dart run bin/main.dart --hidden-encode "https://example.com" --hidden-text "SECRET" --key "k"');
+  stdout.writeln('  dart run bin/main.dart --hidden-encode "https://example.com" --hidden-text "SECRET" --position-key "k"');
   stdout.writeln('  dart run bin/main.dart --hidden-demo');
+  stdout.writeln('  dart run bin/main.dart --encrypted-demo --cipher chacha20');
+  stdout.writeln('  dart run bin/main.dart --encrypted-encode "https://example.com" --hidden-text "SECRET" --position-key "k" --encryption-passphrase "p"');
   stdout.writeln('  dart run bin/main.dart --inspect "Hello TwoLevelQR"');
   stdout.writeln('  dart run bin/main.dart --corrupt-demo');
   stdout.writeln('  dart run bin/main.dart --bench');
@@ -167,6 +205,7 @@ void _runFullTestSuite() {
   totalFailures += MathAndCodecTests.runAll();
   totalFailures += E2eStressTests.runAll();
   totalFailures += HiddenMessageTests.runAll();
+  totalFailures += EncryptedHiddenMessageTests.runAll();
 
   stopwatch.stop();
 
@@ -249,6 +288,60 @@ void _runHiddenEncode({
   stdout.writeln(TerminalUtils.success('✓ Verified hidden decode: "${dec.hiddenText}"'));
 }
 
+void _runEncryptedEncode({
+  required String publicText,
+  required String hiddenText,
+  required String positionKey,
+  required String encryptionPassphrase,
+  required HiddenMessageCipher cipher,
+  required double ratio,
+  required ErrorCorrectionLevel level,
+  int? explicitVersion,
+  MaskPattern? explicitMask,
+}) {
+  TerminalUtils.printHeader(
+    'TwoLevelQR Encrypted Hidden-Message Encoder',
+    subtitle: 'Public: "$publicText" | Hidden: "$hiddenText" | ${cipher.name}',
+  );
+
+  final EncodeResult enc;
+  try {
+    enc = TwoLevelQr.encodeWithEncryptedHiddenMessage(
+      publicText: publicText,
+      hiddenText: hiddenText,
+      positionKey: positionKey,
+      encryptionPassphrase: encryptionPassphrase,
+      cipher: cipher,
+      ratio: ratio,
+      level: level,
+      explicitVersion: explicitVersion,
+      explicitMask: explicitMask,
+    );
+  } on HiddenMessageCapacityException catch (e) {
+    stderr.writeln(TerminalUtils.error('Error: $e'));
+    exit(1);
+  } on ArgumentError catch (e) {
+    stderr.writeln(TerminalUtils.error('Error: ${e.message}'));
+    exit(1);
+  }
+
+  TerminalUtils.printMetric('Symbol Version', 'v${enc.version.number} (${enc.matrix.size}x${enc.matrix.size})');
+  TerminalUtils.printMetric('Error Correction', enc.level.label);
+  TerminalUtils.printMetric('Chosen Mask', 'Pattern ${enc.maskPattern.bits}');
+  TerminalUtils.printMetric('Hidden Channel', '${enc.hiddenBytes!.length} bytes (incl. ${3 + cipher.overhead} framing/overhead)');
+
+  TerminalUtils.printQrMatrix(enc.matrix);
+
+  final dec = TwoLevelQr.decodeWithEncryptedHiddenMessage(
+    enc.matrix,
+    positionKey: positionKey,
+    encryptionPassphrase: encryptionPassphrase,
+    ratio: ratio,
+  );
+  stdout.writeln(TerminalUtils.success('✓ Verified public decode: "${dec.public.text}"'));
+  stdout.writeln(TerminalUtils.success('✓ Verified hidden decode (${dec.cipherName}): "${dec.hiddenText}"'));
+}
+
 void _runInteractiveMenu() {
   TerminalUtils.printHeader(
     'TwoLevelQR CLI Interactive Test Harness',
@@ -264,9 +357,10 @@ void _runInteractiveMenu() {
     stdout.writeln('  [5] Run Reed-Solomon Damage & Recovery Demo');
     stdout.writeln('  [6] Run Performance Benchmarks');
     stdout.writeln('  [7] Keyed Two-Level QR Hidden Message Demo');
+    stdout.writeln('  [8] Encrypted Two-Level QR Hidden Message Demo (AES-SIV / ChaCha20-Poly1305)');
     stdout.writeln('  [0] Exit\n');
 
-    stdout.write(TerminalUtils.color('Select option (0-7): ', TerminalUtils.bold + TerminalUtils.yellow));
+    stdout.write(TerminalUtils.color('Select option (0-8): ', TerminalUtils.bold + TerminalUtils.yellow));
     final choice = stdin.readLineSync()?.trim();
 
     if (choice == '0' || choice == 'q' || choice == null) {
@@ -319,7 +413,7 @@ void _runInteractiveMenu() {
         final publicInput = stdin.readLineSync()?.trim();
         stdout.write('Enter hidden text (default: SECRET_KEY_12345): ');
         final hiddenInput = stdin.readLineSync()?.trim();
-        stdout.write('Enter secret key (default: demo-secret-key): ');
+        stdout.write('Enter position key (default: demo-secret-key): ');
         final keyInput = stdin.readLineSync()?.trim();
         HiddenMessageDemo.runDemo(
           publicText: (publicInput != null && publicInput.isNotEmpty) ? publicInput : 'https://example.com/public-info',
@@ -328,8 +422,24 @@ void _runInteractiveMenu() {
           level: ErrorCorrectionLevel.high,
         );
         break;
+      case '8':
+        stdout.write('\nEnter hidden text (default: SECRET_KEY_12345): ');
+        final hiddenInput = stdin.readLineSync()?.trim();
+        stdout.write('Enter position key (default: demo-position-key): ');
+        final keyInput = stdin.readLineSync()?.trim();
+        stdout.write('Enter encryption passphrase (default: demo-encryption-passphrase): ');
+        final passInput = stdin.readLineSync()?.trim();
+        stdout.write('Cipher [aes-siv/chacha20] (default: aes-siv): ');
+        final cipherInput = stdin.readLineSync()?.trim();
+        EncryptedHiddenMessageDemo.runDemo(
+          hiddenText: (hiddenInput != null && hiddenInput.isNotEmpty) ? hiddenInput : 'SECRET_KEY_12345',
+          positionKey: (keyInput != null && keyInput.isNotEmpty) ? keyInput : 'demo-position-key',
+          encryptionPassphrase: (passInput != null && passInput.isNotEmpty) ? passInput : 'demo-encryption-passphrase',
+          cipherName: (cipherInput != null && cipherInput.isNotEmpty) ? cipherInput : 'aes-siv',
+        );
+        break;
       default:
-        stdout.writeln(TerminalUtils.warning('Invalid option. Please choose 0 to 7.'));
+        stdout.writeln(TerminalUtils.warning('Invalid option. Please choose 0 to 8.'));
     }
   }
 }

@@ -1,0 +1,10 @@
+# Default: run on the Dart VM. The suite is also web-compatible; run it on
+# JavaScript with `dart test -p node` (or `-p chrome`).
+platforms: [vm]
+
+override_platforms:
+  node:
+    settings:
+      arguments: --max-old-space-size=4096
+
+timeout: 2x

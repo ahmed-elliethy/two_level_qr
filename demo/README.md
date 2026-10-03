@@ -31,6 +31,9 @@ This executes:
 3. **Keyed Two-Level QR Hidden Message Channel** — roundtrip, wrong-key
    garbage, standard-scanner compatibility, different keys, UTF-8 secrets,
    noise + hidden errors, capacity overflow, and ratio mismatch.
+4. **Encrypted Hidden Message Channel** — AES-SIV and ChaCha20-Poly1305
+   Unicode roundtrips, wrong passphrase / position key rejection, capacity with
+   encryption overhead, and rejection of plaintext codes.
 
 ## Encoding a two-level QR with a hidden message
 
@@ -38,7 +41,7 @@ This executes:
 dart run bin/main.dart \
   --hidden-encode "https://example.com/public-info" \
   --hidden-text "SECRET_KEY_12345" \
-  --key "my-secret-key" \
+  --position-key "my-secret-key" \
   --level H \
   --ratio 0.8
 ```
@@ -47,7 +50,8 @@ Flags:
 
 - `--hidden-encode` — public QR payload
 - `--hidden-text` — secret message to hide (default `SECRET_KEY_12345`)
-- `--key` — secret key controlling error positions (default `my-secret-key`)
+- `--position-key` — key controlling where the hidden bytes go (default
+  `my-secret-key`; `--key` is accepted as an alias)
 - `--ratio` — fraction of RS error budget used for hidden data (default `0.8`)
 - `--level` — error correction level: `L`, `M`, `Q`, or `H` (default `H`)
 - `--version` — optional explicit QR version (disables auto-bumping)
@@ -59,6 +63,28 @@ and hidden payloads decode correctly.
 If the hidden message is too large even for QR version 40, a meaningful
 `HiddenMessageCapacityException` is printed, showing the payload size and the
 maximum available capacity.
+
+## Encoding with an encrypted hidden message
+
+```bash
+dart run bin/main.dart \
+  --encrypted-encode "https://example.com/public-info" \
+  --hidden-text "SECRET_KEY_12345" \
+  --position-key "my-position-key" \
+  --encryption-passphrase "my-encryption-passphrase" \
+  --cipher aes-siv
+```
+
+Additional flags:
+
+- `--encrypted-encode` — public QR payload
+- `--encryption-passphrase` — passphrase that encrypts the hidden message
+  (must differ from `--position-key`)
+- `--cipher` — `aes-siv` (default) or `chacha20` (ChaCha20-Poly1305)
+
+`--hidden-text`, `--ratio`, `--level`, `--version` and `--mask` work as above.
+The encoder verifies the round trip, including the cipher detected from the
+QR's scheme byte.
 
 ## Hidden-message demo
 
@@ -72,6 +98,23 @@ Run a self-contained demonstration that:
 
 ```bash
 dart run bin/main.dart --hidden-demo
+```
+
+## Encrypted hidden-message demo
+
+Shows why encryption is needed, then uses it:
+
+- Prints what an attacker sees in plaintext mode without the key (the
+  hidden message's bytes, shuffled per block)
+- Encodes the same message encrypted, and shows the attacker view again
+- Reports version, channel bytes, overhead and capacity
+- Decodes with the correct secrets
+- Decodes with a wrong passphrase and a wrong position key, which raise
+  exceptions instead of returning text
+
+```bash
+dart run bin/main.dart --encrypted-demo
+dart run bin/main.dart --encrypted-demo --cipher chacha20
 ```
 
 ## Interactive menu
@@ -91,6 +134,7 @@ Available options include:
 - `[5]` Reed-Solomon damage & recovery demo
 - `[6]` Performance benchmarks
 - `[7]` Keyed two-level QR hidden-message demo
+- `[8]` Encrypted two-level QR hidden-message demo
 - `[0]` Exit
 
 ## Other commands
@@ -136,10 +180,12 @@ demo/
 │   ├── demos/
 │   │   ├── checkpoint_inspector.dart
 │   │   ├── corruption_demo.dart
+│   │   ├── encrypted_hidden_message_demo.dart
 │   │   ├── hidden_message_demo.dart
 │   │   └── pipeline_stage_stepper.dart
 │   ├── suites/
 │   │   ├── e2e_stress_tests.dart
+│   │   ├── encrypted_hidden_message_tests.dart
 │   │   ├── hidden_message_tests.dart
 │   │   └── math_and_codec_tests.dart
 │   └── terminal_utils.dart       # Terminal rendering & formatting

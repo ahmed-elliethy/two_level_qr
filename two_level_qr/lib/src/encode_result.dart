@@ -21,6 +21,7 @@ class EncodeResult {
     required this.matrix,
     this.hiddenText,
     this.hiddenBytes,
+    this.hiddenCipherSchemeId,
   });
 
   /// The original input text or message.
@@ -58,6 +59,10 @@ class EncodeResult {
   /// result was produced by a two-level encode with a hidden channel.
   /// `null` for normal QR encodes.
   final List<int>? hiddenBytes;
+
+  /// Scheme ID of the cipher that encrypted the hidden message, or `null`
+  /// for plaintext two-level encodes and normal QR encodes.
+  final int? hiddenCipherSchemeId;
 
   @override
   String toString() =>

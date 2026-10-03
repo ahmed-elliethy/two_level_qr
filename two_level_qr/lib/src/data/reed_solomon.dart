@@ -12,7 +12,8 @@ class ReedSolomonException implements Exception {
 
 /// Reed-Solomon encoder and decoder for QR Code symbols.
 class ReedSolomonCodec implements ReedSolomonCodecPort {
-  ReedSolomonCodec([GaloisField256? field]) : _gf = field ?? GaloisField256.instance;
+  ReedSolomonCodec([GaloisField256? field])
+      : _gf = field ?? GaloisField256.instance;
 
   final GaloisField256 _gf;
 
@@ -74,9 +75,9 @@ class ReedSolomonCodec implements ReedSolomonCodecPort {
 
     // 2. Berlekamp-Massey Algorithm to find Error Locator Polynomial Lambda(x)
     var lambda = <int>[1]; // Lambda(x) = 1
-    var b = <int>[1];      // B(x) = 1
-    var l = 0;             // Number of errors detected so far
-    var m = 1;             // Iteration offset
+    var b = <int>[1]; // B(x) = 1
+    var l = 0; // Number of errors detected so far
+    var m = 1; // Iteration offset
 
     for (var k = 0; k < eccCodewordsCount; k++) {
       // Compute discrepancy delta_k = sum_{j=0}^l (lambda_j * S_{k-j})
@@ -94,7 +95,9 @@ class ReedSolomonCodec implements ReedSolomonCodecPort {
         final shiftedScaledB = <int>[...List<int>.filled(m, 0), ...scaledB];
 
         // Pad lambda or shiftedScaledB to equal length for XOR
-        final maxLen = shiftedScaledB.length > lambda.length ? shiftedScaledB.length : lambda.length;
+        final maxLen = shiftedScaledB.length > lambda.length
+            ? shiftedScaledB.length
+            : lambda.length;
         final newLambda = List<int>.filled(maxLen, 0, growable: true);
         for (var i = 0; i < lambda.length; i++) {
           newLambda[i] ^= lambda[i];
@@ -120,7 +123,8 @@ class ReedSolomonCodec implements ReedSolomonCodecPort {
 
     final numErrors = l;
     if (numErrors > eccCodewordsCount ~/ 2) {
-      throw ReedSolomonException('Too many errors to correct (detected $numErrors, max ${eccCodewordsCount ~/ 2})');
+      throw ReedSolomonException(
+          'Too many errors to correct (detected $numErrors, max ${eccCodewordsCount ~/ 2})');
     }
 
     // 3. Chien Search to find error positions
@@ -145,7 +149,8 @@ class ReedSolomonCodec implements ReedSolomonCodecPort {
     }
 
     if (errorPositions.length != numErrors) {
-      throw ReedSolomonException('Chien search found ${errorPositions.length} roots, expected $numErrors');
+      throw ReedSolomonException(
+          'Chien search found ${errorPositions.length} roots, expected $numErrors');
     }
 
     // 4. Forney Algorithm to calculate error values
@@ -185,7 +190,8 @@ class ReedSolomonCodec implements ReedSolomonCodecPort {
       }
 
       if (lambdaPrimeVal == 0) {
-        throw ReedSolomonException('Formal derivative Lambda prime evaluated to 0');
+        throw ReedSolomonException(
+            'Formal derivative Lambda prime evaluated to 0');
       }
 
       final errorValue = _gf.multiply(xk, _gf.divide(omegaVal, lambdaPrimeVal));
@@ -195,7 +201,8 @@ class ReedSolomonCodec implements ReedSolomonCodecPort {
     // 5. Verify syndrome of corrected data is all zero
     for (var i = 0; i < eccCodewordsCount; i++) {
       if (_gf.evaluatePoly(corrected, _gf.exp(i)) != 0) {
-        throw ReedSolomonException('Error correction verification failed (syndrome non-zero)');
+        throw ReedSolomonException(
+            'Error correction verification failed (syndrome non-zero)');
       }
     }
 
